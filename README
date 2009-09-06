@@ -1,0 +1,7 @@
+The JKDownloadManager class can be used to perform multiple downloads at once. It manages instances of the JKDownload class to perform those downloads. A JKDownload object itself is capable of downloading the data and you can use it without the JKDownloadManager, you only need the manager to perform multiple downloads at once.
+
+I will post some sample code later on, for now you have to read the inline documentation. You may perform one download like so:
+
+[[JKDownload downloadWithURLString:@"http://www.google.com"] performWithDelegate:self];
+
+And then implement the delegate methods.
