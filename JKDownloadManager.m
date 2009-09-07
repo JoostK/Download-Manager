@@ -1,32 +1,28 @@
 /**
- * JKDownloadManager v1.1
- * ---------------------
- * 6 September 2009
+ * JKDownloadManager.m
  * 
- * License:
- * 		Copyright (c) 2009 Joost Koehoorn
- * 		
- * 		Permission is hereby granted, free of charge, to any person
- * 		obtaining a copy of this software and associated documentation
- * 		files (the "Software"), to deal in the Software without
- * 		restriction, including without limitation the rights to use,
- * 		copy, modify, merge, publish, distribute, sublicense, and/or sell
- * 		copies of the Software, and to permit persons to whom the
- * 		Software is furnished to do so, subject to the following
- * 		conditions:
- * 		
- * 		The above copyright notice and this permission notice shall be
- * 		included in all copies or substantial portions of the Software.
- * 		
- * 		THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * 		EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
- * 		OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * 		NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- * 		HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
- * 		WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * 		FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
- * 		OTHER DEALINGS IN THE SOFTWARE.
+ * Copyright (c) 2009 Joost Koehoorn
  * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ * 
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
  */
 #import "JKDownloadManager.h"
 #import "AppController.h"
@@ -73,12 +69,12 @@
 	return [self initWithURL:[NSURL URLWithString:URLString] context:context];
 }
 
-- (JKDownload *)initWithURL:(NSURL *)url {
-	return [self initWithURL:url context:nil];
+- (JKDownload *)initWithURL:(NSURL *)URL {
+	return [self initWithURL:URL context:nil];
 }
 
-- (JKDownload *)initWithURL:(NSURL *)url context:(id)context {
-	return [self initWithURLRequest:[NSURLRequest requestWithURL:url] context:context];
+- (JKDownload *)initWithURL:(NSURL *)URL context:(id)context {
+	return [self initWithURLRequest:[NSURLRequest requestWithURL:URL] context:context];
 }
 
 - (JKDownload *)initWithURLRequest:(NSURLRequest *)request {
@@ -103,12 +99,12 @@
 	return [[[JKDownload alloc] initWithURLString:URLString context:context] autorelease];
 }
 
-+ (JKDownload *)downloadWithURL:(NSURL *)url {
-	return [[[JKDownload alloc] initWithURL:url] autorelease];
++ (JKDownload *)downloadWithURL:(NSURL *)URL {
+	return [[[JKDownload alloc] initWithURL:URL] autorelease];
 }
 
-+ (JKDownload *)downloadWithURL:(NSURL *)url context:(id)context {
-	return [[[JKDownload alloc] initWithURL:url context:context] autorelease];
++ (JKDownload *)downloadWithURL:(NSURL *)URL context:(id)context {
+	return [[[JKDownload alloc] initWithURL:URL context:context] autorelease];
 }
 
 + (JKDownload *)downloadWithURLRequest:(NSURLRequest *)request {
@@ -123,7 +119,7 @@
 #pragma mark NSCopying protocol methods
 
 - (id)copyWithZone:(NSZone *)zone {
-	JKDownload *copy = [[[self class] allocWithZone:zone] initWithURLRequest:[_request copy] context:context];
+	JKDownload *copy = [[[self class] allocWithZone:zone] initWithURLRequest:[_request copy] context:_context];
 	
 	return copy;
 }
