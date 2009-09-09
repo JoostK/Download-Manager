@@ -2,7 +2,7 @@
 build/
 
 # Xcode project
-.xcodeproj/
+*.xcodeproj/
 !*.xcodeproj/project.pbxproj
 
 # Mac stuff
