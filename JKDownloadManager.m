@@ -25,12 +25,12 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 #import "JKDownloadManager.h"
-#import "AppController.h"
 
+NSString *const JKDownloadManagerDuplicateStackException = @"JKDownloadManagerDuplicateStackException";
 
 @interface JKDownload (Internal)
 
-- (void)_setStackId:(NSString *)stackId;
+- (void)_setStackName:(NSString *)stackName;
 - (void)_openConnection;
 - (void)_resetConnection;
 
@@ -41,6 +41,8 @@
 @interface JKDownloadManager (Internal)
 
 - (void)_downloadDidFinish:(JKDownload *)download;
+- (void)_incrementNumberOfDownloads;
+- (void)_decrementNumberOfDownloads;
 
 @end
 
@@ -51,7 +53,7 @@
 @implementation JKDownload
 
 @synthesize request = _request, context = _context, connection = _connection, data = _data, error = _error,
-			statusCode = _statusCode, stackId = _stackId, delegate = _delegate, finished = _finished;
+			statusCode = _statusCode, stackName = _stackName, delegate = _delegate, finished = _finished;
 
 #pragma mark -
 #pragma mark Initialization
@@ -157,9 +159,6 @@
 }
 
 - (void)connection:(NSURLConnection *)connection didFailWithError:(NSError *)error {
-	// Done with this connection
-	[self _resetConnection];
-	
 	// Store error
 	[_error release];
 	_error = [error retain];
@@ -168,16 +167,19 @@
 	if([_delegate respondsToSelector:@selector(download:didFailWithError:)]){
 		[_delegate download:self didFailWithError:_error];
 	}
+	
+	// Done with this connection
+	[self _resetConnection];
 }
 
 - (void)connectionDidFinishLoading:(NSURLConnection *)connection {
-	// Done with this connection
-	[self _resetConnection];
-	
 	// Call delegate
 	if([_delegate respondsToSelector:@selector(downloadDidFinishLoading:)]){
 		[_delegate downloadDidFinishLoading:self];
 	}
+	
+	// Done with this connection
+	[self _resetConnection];
 }
 
 #pragma mark -
@@ -190,7 +192,7 @@
 	[_data release], _data = nil;
 	[_error release], _error = nil;
 	[_context release], _context = nil;
-	[_stackId release], _stackId = nil;
+	[_stackName release], _stackName = nil;
 	
 	[super dealloc];
 }
@@ -204,10 +206,10 @@
 
 @implementation JKDownload (Internal)
 
-- (void)_setStackId:(NSString *)stackId {
-	if(stackId != _stackId){
-		[_stackId release];
-		_stackId = [stackId retain];
+- (void)_setStackName:(NSString *)stackName {
+	if(stackName != _stackName){
+		[_stackName release];
+		_stackName = [stackName retain];
 	}
 }
 
@@ -222,19 +224,22 @@
 	
 	// Create connection
 	_connection = [[NSURLConnection alloc] initWithRequest:_request delegate:self];
-	[[AppController sharedController] incrementNumberOfConnections];
+	[[JKDownloadManager sharedManager] _incrementNumberOfDownloads];
 }
 
 - (void)_resetConnection {
 	if(_connection != nil){
 		// Mark as finished
 		_finished = YES;
+		
+		// Let manager know the download has finished so that it can
+		// track the downloads to see whether they all have finished
 		[[JKDownloadManager sharedManager] _downloadDidFinish:self];
 		
 		// Release connection
 		[_connection cancel];
 		[_connection release], _connection = nil;
-		[[AppController sharedController] decrementNumberOfConnections];
+		[[JKDownloadManager sharedManager] _decrementNumberOfDownloads];
 	}
 }
 
@@ -298,10 +303,17 @@ static JKDownloadManager *sharedDownloadManagerInstance = nil;
 	[download performWithDelegate:delegate];
 }
 
-- (void)performDownloads:(NSArray *)downloads withDelegate:(id <JKDownloadManagerDelegate>)delegate stackId:(NSString *)stackId {
+- (void)performDownloads:(NSArray *)downloads withDelegate:(id <JKDownloadManagerDelegate>)delegate inStack:(NSString *)stackName {
 	// Stack id must not be nil
-	if(stackId == nil){
-		[NSException raise:NSInvalidArgumentException format:@"%s: stackId must not be nil.", __PRETTY_FUNCTION__];
+	if(stackName == nil){
+		[NSException raise:NSInvalidArgumentException format:@"%s: stackName must not be nil.", __PRETTY_FUNCTION__];
+		return;
+	}
+	
+	// Check whether this stackId is already being used
+	if(nil != [_stack objectForKey:stackName]){
+		[NSException raise:JKDownloadManagerDuplicateStackException format:@"%s: stack name (%@) already being used.", __PRETTY_FUNCTION__, stackName];
+		return;
 	}
 	
 	// Create stack object
@@ -309,24 +321,58 @@ static JKDownloadManager *sharedDownloadManagerInstance = nil;
 		_stack = [[NSMutableDictionary alloc] init];
 	}
 	
-	// Add objects to stack
-	[_stack setObject:downloads forKey:stackId];
+	// Add objects to stack. Copy contents to an
+	// inmutable array so you cannot add another
+	// download when the downloading process has begun
+	[_stack setObject:[NSArray arrayWithArray:downloads] forKey:stackName];
 	
 	// Cycle through downloads
 	for(JKDownload *download in downloads){
-		[download _setStackId:stackId];
+		[download _setStackName:stackName];
 		[download performWithDelegate:delegate];
 	}
 }
 
-- (void)cancelDownloadsInStackWithId:(NSString *)stackId {
+- (void)addDownload:(JKDownload *)download toQueue:(NSString *)queue {
+	// Create queue object
+	if(_queue == nil){
+		_queue = [[NSMutableDictionary alloc] init];
+	}
+	
+	// Get the downloads
+	NSMutableArray *downloads = [_queue objectForKey:queue];
+	
+	// Create the stack when it does not yet exist
+	if(downloads == nil){
+		downloads = [NSMutableArray array];
+		[_queue setObject:downloads forKey:queue];
+	}
+	
+	// Add the download object
+	[downloads addObject:download];
+}
+
+- (void)performDownloadsInQueue:(NSString *)queue withDelegate:(id <JKDownloadManagerDelegate>)delegate {
+	// Get the stack contents
+	NSArray *downloads = [_queue objectForKey:queue];
+	
+	// Perform all the downloads
+	if(downloads != nil){
+		[self performDownloads:downloads withDelegate:delegate inStack:queue];
+	}
+	
+	// Remove the downloads from the queue
+	[_queue removeObjectForKey:queue];
+}
+
+- (void)cancelDownloadsWithinStack:(NSString *)stackName {
 	// Get stack array
-	NSArray *stack = [_stack objectForKey:stackId];
+	NSArray *stack = [_stack objectForKey:stackName];
 	
 	// Remove stack from stacks array, so that we will
 	// ignore the fact that the download did finish
 	[[stack retain] autorelease];
-	[_stack removeObjectForKey:stackId];
+	[_stack removeObjectForKey:stackName];
 	
 	// Cancel all downloads
 	for(JKDownload *download in stack){
@@ -334,10 +380,19 @@ static JKDownloadManager *sharedDownloadManagerInstance = nil;
 	}
 }
 
+- (NSArray *)downloadsInStack:(NSString *)stackName {
+	return [_stack objectForKey:stackName];
+}
+
+- (NSArray *)downloadsInQueue:(NSString *)queue {
+	return [_queue objectForKey:queue];
+}
+
 #pragma mark -
 
 - (void)dealloc {
 	[_stack release], _stack = nil;
+	[_queue release], _queue = nil;
 	
 	[super dealloc];
 }
@@ -351,14 +406,14 @@ static JKDownloadManager *sharedDownloadManagerInstance = nil;
 
 - (void)_downloadDidFinish:(JKDownload *)download {
 	// When the download was not performed within a stack,
-	// Ignore the fact that it did finish. The download
-	// will call it's delegate itself.
-	if(download.stackId == nil) return;
+	// ignore the fact that it did finish. The download
+	// itself will call it's delegate.
+	if(download.stackName == nil) return;
 	
 	// Get stack array. We have to check whether it is nil,
 	// because when all downloads in a stack are being cancelled,
 	// we don't want to call our delegate
-	NSArray *stack = [_stack objectForKey:download.stackId];
+	NSArray *stack = [_stack objectForKey:download.stackName];
 	if(stack != nil){
 		// See whether we have finished all the dowloads in the stack
 		BOOL finished = YES;
@@ -371,16 +426,29 @@ static JKDownloadManager *sharedDownloadManagerInstance = nil;
 		
 		// When finished all downloads
 		if(finished){
-			// Remove from stack
-			[[stack retain] autorelease];
-			[_stack removeObjectForKey:download.stackId];
-			
 			// Call delegate
 			if([download.delegate respondsToSelector:@selector(downloadManager:didFinishLoadingDownloadsInStack:)]){
-				[download.delegate downloadManager:self didFinishLoadingDownloadsInStack:stack];
+				[download.delegate downloadManager:self didFinishLoadingDownloadsInStack:download.stackName];
 			}
+			
+			// Remove from stack
+			[_stack removeObjectForKey:download.stackName];
 		}
 	}
+}
+
+- (void)_incrementNumberOfDownloads {
+#if TARGET_OS_IPHONE
+	_numberOfDownloads++;
+	[UIApplication sharedApplication].networkActivityIndicatorVisible = YES;
+#endif
+}
+
+- (void)_decrementNumberOfDownloads {
+#if TARGET_OS_IPHONE
+	_numberOfDownloads = MAX(_numberOfDownloads - 1, 0);
+	[UIApplication sharedApplication].networkActivityIndicatorVisible = _numberOfDownloads > 0;
+#endif
 }
 
 @end

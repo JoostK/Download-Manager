@@ -26,6 +26,7 @@
  */
 #import <Foundation/Foundation.h>
 
+extern NSString *const JKDownloadManagerDuplicateStackException;
 
 @class JKDownloadManager, JKDownload;
 
@@ -55,9 +56,9 @@
  * fail loading
  * 
  * @param	id		Shared download manager object
- * @param	id		Array with all the downloads objects
+ * @param	id		The name of the stack that did finish downloading
  */
-- (void)downloadManager:(JKDownloadManager *)downloadManager didFinishLoadingDownloadsInStack:(NSArray *)downloads;
+- (void)downloadManager:(JKDownloadManager *)downloadManager didFinishLoadingDownloadsInStack:(NSString *)stackName;
 
 @end
 
@@ -75,7 +76,7 @@
 	NSInteger _statusCode;
 	id _context;
 	
-	NSString *_stackId;
+	NSString *_stackName;
 	id <JKDownloadManagerDelegate> _delegate; // Weak reference
 	BOOL _finished;
 }
@@ -114,10 +115,10 @@
 @property(nonatomic, retain) id context;
 
 /**
- * The id of the stack this download is performed in.
+ * The name of the stack this download is performed in.
  * Will be nil when download is individual
  */
-@property(nonatomic, readonly) NSString *stackId;
+@property(nonatomic, readonly) NSString *stackName;
 
 /**
  * The download's delegate. See the JKDownloadManagerDelegate
@@ -194,6 +195,10 @@
 
 @interface JKDownloadManager : NSObject {
 	NSMutableDictionary *_stack;
+	NSMutableDictionary *_queue;
+#if TARGET_OS_IPHONE
+	NSInteger _numberOfDownloads;
+#endif
 }
 
 /**
@@ -215,20 +220,63 @@
 /**
  * Perform multiple downloads at once
  *
- * @param	id		Array of download objects to be performed at one time
+ * @param	id		Array of download objects to be performed at one time. Will be copied, array will become immutable
  * @param	id		Delegate of the download objects
- * @param	id		The id of the stack. Can be used to cancel all downloads in a stack at once
+ * @param	id		The name of the stack. Can be used to cancel all downloads in a stack at once
  * @return	void
  */
-- (void)performDownloads:(NSArray *)downloads withDelegate:(id <JKDownloadManagerDelegate>)delegate stackId:(NSString *)stackId;
+- (void)performDownloads:(NSArray *)downloads withDelegate:(id <JKDownloadManagerDelegate>)delegate inStack:(NSString *)stackName;
+
+/**
+ * Add a download object to a queue without starting the downloading process immediately
+ * You may want to use this if you had a loop to parse different URLs, so you can hold
+ * them in the manager instead of managing them yourself in an NSMutableArray. You can
+ * add a download to a queue which has already begun downloading, but it will not be
+ * performed in the same loop.
+ * 
+ * @param	id		Download object to be added to the stack
+ * @param	id		The name of the queue the object should be added to
+ * @return	void
+ */
+- (void)addDownload:(JKDownload *)download toQueue:(NSString *)queue;
+
+/**
+ * Start downloading all the downloads in a queue. This will empty the queue so you
+ * are able to add new downloads to the same queue, but you will not be able to perform
+ * that queue until all the previous downloads in the queue have finished downloads.
+ * This method calls -[JKDownloadManager performDownloads:withDelegate:inStack:] with
+ * stackName set to the name of the queue, so you can read the stackName property
+ * to be able to identify your downloads
+ * 
+ * @param	id		The name of the queue which should begin downloading
+ * @param	id		Delegate of the download objects
+ * @return	void
+ */
+- (void)performDownloadsInQueue:(NSString *)queue withDelegate:(id <JKDownloadManagerDelegate>)delegate;
 
 /**
  * Cancel all the downloads in a stack at once. This will NOT call the delegate
  * that it has finished downloading all the downloads in the stack.
  *
- * @param	id		The id of the stack of which all downloads should be cancelled
+ * @param	id		The name of the stack of which all downloads should be cancelled
  * @return	void
  */
-- (void)cancelDownloadsInStackWithId:(NSString *)stackId;
+- (void)cancelDownloadsWithinStack:(NSString *)stackName;
+
+/**
+ * Get the array of download objects in the given stack
+ *
+ * @param	id		The name of the stack
+ * @return	id		Array which contains all the download objects
+ */
+- (NSArray *)downloadsInStack:(NSString *)stackName;
+
+/**
+ * Get the array of download objects in the given queue
+ *
+ * @param	id		The name of the queue
+ * @return	id		Array which contains all the download objects
+ */
+- (NSArray *)downloadsInQueue:(NSString *)queue;
 
 @end
