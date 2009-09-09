@@ -1,0 +1,7 @@
+//
+// Prefix header for all source files of the 'Download-Manager' target in the 'Download-Manager' project
+//
+
+#ifdef __OBJC__
+    #import <Cocoa/Cocoa.h>
+#endif

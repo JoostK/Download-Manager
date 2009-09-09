@@ -1,0 +1,10 @@
+# ignore build
+build/
+
+# Xcode project
+.xcodeproj/
+!*.xcodeproj/project.pbxproj
+
+# Mac stuff
+.DS_Store
+profile
