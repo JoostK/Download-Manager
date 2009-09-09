@@ -11,7 +11,13 @@ NSString *const JKFailedLoadingException = @"JKFailedLoadingException";
 
 @implementation SampleCode
 
-- (void)awakeFromNib {
+@synthesize window = _window, textView = _textView, clearButton = _clearButton;
+
+- (void)applicationDidFinishLaunching:(NSNotification *)notification {
+	[self performDownloads:nil];
+}
+
+- (IBAction)performDownloads:(id)sender {
 	// Setup Google download object
 	// There are more initializers available for further setting of the request, see JKDownloadManager.h for details
 	// The context being given is a selector value. When the download finishes, we can read the context value and perform the selector
@@ -25,8 +31,8 @@ NSString *const JKFailedLoadingException = @"JKFailedLoadingException";
 	// Setup Twitter download object
 	// Simplest NSURLRequest being used, but you may ofcourse use any NSURLRequest object. This implementation does not differ from
 	// calling +[JKDownload downloadWithURLString:context:] bacause all the 'default' objects are being used.
-	JKDownload *twitterObject = [JKDownload downloadWithURLRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:TWITTER_URL_STRING]]
-														   context:[NSValue valueWithPointer:@selector(handleTwitterDownload:error:)]];
+	JKDownload *twitterDownload = [JKDownload downloadWithURLRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:TWITTER_URL_STRING]]
+															 context:[NSValue valueWithPointer:@selector(handleTwitterDownload:error:)]];
 	
 	// Perform downloads
 	[googleDownload performWithDelegate:self];
@@ -43,7 +49,8 @@ NSString *const JKFailedLoadingException = @"JKFailedLoadingException";
 	// Setup multiple downloads array
 	NSArray *downloads = [NSArray arrayWithObjects:
 						  [JKDownload downloadWithURLString:GOOGLE_URL_STRING context:[NSValue valueWithPointer:@selector(handleGoogleDownload:error:)]],
-						  [JKDownload downloadWithURLString:TWITTER_URL_STRING context:[NSValue valueWithPointer:@selector(handleGoogleDownload:error:)]]
+						  [JKDownload downloadWithURLString:TWITTER_URL_STRING context:[NSValue valueWithPointer:@selector(handleTwitterDownload:error:)]],
+						  nil
 						 ];
 	
 	// Perform the downloads all at once
@@ -53,11 +60,60 @@ NSString *const JKFailedLoadingException = @"JKFailedLoadingException";
 	// You will then receive -[JKDownloadManagerDelegate downloadManager:didFinishLoadingDownloadsInStack:] to let
 	// the delegate know it has finished downloading all the download objects. That method is never being called when
 	// -[JKDownloadManager cancelDownloadsInStackWithId:] has been called before all downloads have finished.
-	[[JKDownloadManager sharedManager] performDownloads:downloads withDelegate:self stackId:@"SampleDownloads"];
+	BEGIN_EXCEPTION_HANDLING
+	
+	[[JKDownloadManager sharedManager] performDownloads:downloads withDelegate:self inStack:@"SampleDownloads"];
+	[[JKDownloadManager sharedManager] performDownloads:downloads withDelegate:self inStack:@"SampleDownloads"];
+	
+	END_EXCEPTION_HANDLING
+	
+	// -----------------------
+	// MULTIPLE DOWNLOADS LOOP
+	// -----------------------
+	
+	// Setup array of URLs to load
+	NSArray *URLs = [NSArray arrayWithObjects:
+					 GOOGLE_URL_STRING,
+					 TWITTER_URL_STRING,
+					 nil
+					];
+	
+	// Create a downloa object for each URL
+	for(NSString *URL in URLs){
+		[[JKDownloadManager sharedManager] addDownload:[JKDownload downloadWithURLString:URL context:[NSValue valueWithPointer:@selector(handleDownload:error:)]] toQueue:@"SampleLoop"];
+	}
+	
+	BEGIN_EXCEPTION_HANDLING
+	
+	// Perform downloads
+	[[JKDownloadManager sharedManager] performDownloadsInQueue:@"SampleLoop" withDelegate:self];
+	
+	// Performing the downloads in the same queue will have no results, because
+	// the above call will have removed all the download objects from the queue.
+	// You can access the downloads using -[JKDownloadManager downloadsInStack:]
+	// as long as all the downloads have not finished downloading
+	[[JKDownloadManager sharedManager] performDownloadsInQueue:@"SampleLoop" withDelegate:self];
+	
+	END_EXCEPTION_HANDLING
+}
+
+- (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender {
+	return YES;
 }
 
 #pragma mark -
 #pragma mark Handlers
+
+- (void)handleDownload:(JKDownload *)download error:(NSError *)error {
+	// Handle error
+	if(error != nil){
+		[NSException raise:JKFailedLoadingException format:@"Failed downloading data"];
+		return;
+	}
+	
+	// Log
+	[self appendToLog:[NSString stringWithFormat:@"Download performed: %@ within stack: %@", download, download.stackName]];
+}
 
 - (void)handleGoogleDownload:(JKDownload *)download error:(NSError *)error {
 	// Handle error
@@ -65,6 +121,9 @@ NSString *const JKFailedLoadingException = @"JKFailedLoadingException";
 		[NSException raise:JKFailedLoadingException format:@"Failed downloading Google data"];
 		return;
 	}
+	
+	// Log
+	[self appendToLog:[NSString stringWithFormat:@"Google download performed: %@ within stack: %@", download, download.stackName]];
 	
 	// Parse data
 	[self parseGoogleData:download.data];
@@ -79,6 +138,9 @@ NSString *const JKFailedLoadingException = @"JKFailedLoadingException";
 		return;
 	}
 	
+	// Log
+	[self appendToLog:[NSString stringWithFormat:@"Twitter download performed: %@ within stack: %@", download, download.stackName]];
+	
 	// Parse data
 	[self parseTwitterData:download.data];
 	
@@ -90,34 +152,55 @@ NSString *const JKFailedLoadingException = @"JKFailedLoadingException";
 
 - (void)parseGoogleData:(NSData *)data {
 	// Parsing code
-	NSLog(@"Parsing Google data: %@", [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease]);
 }
 
 - (void)parseTwitterData:(NSData *)data {
 	// Parsing code
-	NSLog(@"Parsing Twitter data: %@", [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease]);
 }
 
 #pragma mark -
 #pragma mark JKDownloadManagerDelegate methods
 
 - (void)downloadDidFinishLoading:(JKDownload *)download {
+	BEGIN_EXCEPTION_HANDLING
+	
 	SEL handler = [download.context pointerValue];
 	
 	// Call the handler with a nil error
 	[self performSelector:handler withObject:download withObject:nil];
+	
+	END_EXCEPTION_HANDLING
 }
 
 - (void)download:(JKDownload *)download didFailWithError:(NSError *)error {
+	BEGIN_EXCEPTION_HANDLING
+	
 	SEL handler = [download.context pointerValue];
 	
-	// Call the handler with the error object
+	// Call the handler with a nil error
 	[self performSelector:handler withObject:download withObject:error];
+	
+	END_EXCEPTION_HANDLING
 }
 
-- (void)downloadManager:(JKDownloadManager *)downloadManager didFinishLoadingDownloadsInStack:(NSArray *)downloads {
+- (void)downloadManager:(JKDownloadManager *)downloadManager didFinishLoadingDownloadsInStack:(NSString *)stackName {
 	// All downloads have finished downloading
-	NSLog(@"That's amazing. When you see this message you know all of these downloads have finished:\n\n%@", downloads);
+	[self appendToLog:[NSString stringWithFormat:@"All the downloads in the %@ stack have finished:\n\n%@", stackName, [downloadManager downloadsInStack:stackName]]];
+}
+
+#pragma mark -
+#pragma mark GUI methods
+
+- (IBAction)clearLog:(id)sender {
+	_textView.string = @"";
+}
+
+- (void)appendToLog:(NSString *)string {
+	if(_textView.string == nil || [_textView.string isEqualToString:@""]){
+		_textView.string = [NSString stringWithFormat:@"%@:\n\n%@", [NSDate date], string];
+	} else {
+		_textView.string = [_textView.string stringByAppendingFormat:@"\n-------------------\n%@:\n\n%@", [NSDate date], string];
+	}
 }
 
 @end;
