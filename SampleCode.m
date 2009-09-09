@@ -38,7 +38,7 @@ NSString *const JKFailedLoadingException = @"JKFailedLoadingException";
 	[googleDownload performWithDelegate:self];
 	[twitterDownload performWithDelegate:self];
 	
-	// Performing download may be done like this, this is an alias for the above one:
+	// Performing download may be done like this, this is an alias for the above (preferred) one:
 	// [[JKDownloadManager sharedManager] performDownload:googleDownload withDelegate:self];
 	// [[JKDownloadManager sharedManager] performDownload:twitterDownload withDelegate:self];
 	
@@ -50,12 +50,11 @@ NSString *const JKFailedLoadingException = @"JKFailedLoadingException";
 	NSArray *downloads = [NSArray arrayWithObjects:
 						  [JKDownload downloadWithURLString:GOOGLE_URL_STRING context:[NSValue valueWithPointer:@selector(handleGoogleDownload:error:)]],
 						  [JKDownload downloadWithURLString:TWITTER_URL_STRING context:[NSValue valueWithPointer:@selector(handleTwitterDownload:error:)]],
-						  nil
-						 ];
+						 nil];
 	
 	// Perform the downloads all at once
-	// The stackId must be an NSString object which is being used to store the downloads array in. Passing
-	// nil as stackId will throw an NSInvalidArgumentException. You can use this stackId to cancel all the downloads
+	// The stack name must be an NSString object which is being used to store the downloads array in. Passing
+	// nil as stack name will throw an NSInvalidArgumentException. You can use this name to cancel all the downloads
 	// at once. The stack will be deleted from the sharedManager once all downloads have finished downloading.
 	// You will then receive -[JKDownloadManagerDelegate downloadManager:didFinishLoadingDownloadsInStack:] to let
 	// the delegate know it has finished downloading all the download objects. That method is never being called when
@@ -63,6 +62,9 @@ NSString *const JKFailedLoadingException = @"JKFailedLoadingException";
 	BEGIN_EXCEPTION_HANDLING
 	
 	[[JKDownloadManager sharedManager] performDownloads:downloads withDelegate:self inStack:@"SampleDownloads"];
+	
+	// This will throw a JKDownloadManagerDuplicateStackException exception because we perform a new stack of
+	// downloads using an in use stack name.
 	[[JKDownloadManager sharedManager] performDownloads:downloads withDelegate:self inStack:@"SampleDownloads"];
 	
 	END_EXCEPTION_HANDLING
@@ -72,15 +74,13 @@ NSString *const JKFailedLoadingException = @"JKFailedLoadingException";
 	// -----------------------
 	
 	// Setup array of URLs to load
-	NSArray *URLs = [NSArray arrayWithObjects:
-					 GOOGLE_URL_STRING,
-					 TWITTER_URL_STRING,
-					 nil
-					];
+	NSArray *URLs = [NSArray arrayWithObjects:GOOGLE_URL_STRING, TWITTER_URL_STRING, nil];
 	
-	// Create a downloa object for each URL
+	// Create a download object for each URL
 	for(NSString *URL in URLs){
-		[[JKDownloadManager sharedManager] addDownload:[JKDownload downloadWithURLString:URL context:[NSValue valueWithPointer:@selector(handleDownload:error:)]] toQueue:@"SampleLoop"];
+		[[JKDownloadManager sharedManager] addDownload:[JKDownload downloadWithURLString:URL
+																				 context:[NSValue valueWithPointer:@selector(handleDownload:error:)]]
+											   toQueue:@"SampleLoop"];
 	}
 	
 	BEGIN_EXCEPTION_HANDLING
@@ -88,7 +88,7 @@ NSString *const JKFailedLoadingException = @"JKFailedLoadingException";
 	// Perform downloads
 	[[JKDownloadManager sharedManager] performDownloadsInQueue:@"SampleLoop" withDelegate:self];
 	
-	// Performing the downloads in the same queue will have no results, because
+	// Performing the downloads in the same queue again will have no result, because
 	// the above call will have removed all the download objects from the queue.
 	// You can access the downloads using -[JKDownloadManager downloadsInStack:]
 	// as long as all the downloads have not finished downloading
@@ -177,7 +177,7 @@ NSString *const JKFailedLoadingException = @"JKFailedLoadingException";
 	
 	SEL handler = [download.context pointerValue];
 	
-	// Call the handler with a nil error
+	// Call the handler with the error object
 	[self performSelector:handler withObject:download withObject:error];
 	
 	END_EXCEPTION_HANDLING
