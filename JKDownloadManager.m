@@ -121,7 +121,7 @@ NSString *const JKDownloadManagerDuplicateStackException = @"JKDownloadManagerDu
 #pragma mark NSCopying protocol methods
 
 - (id)copyWithZone:(NSZone *)zone {
-	JKDownload *copy = [[[self class] allocWithZone:zone] initWithURLRequest:[_request copy] context:_context];
+	JKDownload *copy = [[[self class] allocWithZone:zone] initWithURLRequest:[[_request copy] autorelease] context:_context];
 	
 	return copy;
 }
